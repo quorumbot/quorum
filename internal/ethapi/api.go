@@ -2016,9 +2016,9 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction, pr
 			}
 		}
 	}
-	if err := b.SendTx(ctx, tx); err != nil {
+	/*if err := b.SendTx(ctx, tx); err != nil {
 		return common.Hash{}, err
-	}
+	}*/
 	if tx.To() == nil {
 		addr := crypto.CreateAddress(from, tx.Nonce())
 		log.Info("Submitted contract creation", "hash", tx.Hash().Hex(), "from", from, "nonce", tx.Nonce(), "contract", addr.Hex(), "value", tx.Value())

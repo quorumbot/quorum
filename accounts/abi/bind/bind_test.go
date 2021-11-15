@@ -1858,6 +1858,12 @@ func TestGolangBindings(t *testing.T) {
 		t.Fatalf("failed to replace binding test dependency to current source tree: %v\n%s", err, out)
 	}
 
+	tidy := exec.Command(gocmd, "mod", "tidy")
+	tidy.Dir = pkg
+	if out, err := tidy.CombinedOutput(); err != nil {
+		t.Fatalf("failed to go mod tidy: %v\n%s", err, out)
+	}
+
 	// Test the entire package and report any failures
 	cmd := exec.Command(gocmd, "test", "-v", "-count", "1")
 	cmd.Dir = pkg
