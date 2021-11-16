@@ -676,7 +676,7 @@ func (h *handler) makeQuorumConsensusProtocol(ProtoName string, version uint, le
 			select {
 			case <-p.EthPeerRegistered:
 				// the ethpeer should be registered, try to retrieve it and start the consensus handler.
-				p2pPeerId := fmt.Sprintf("%x", p.ID().Bytes()[:8])
+				p2pPeerId := fmt.Sprintf("%x", p.ID().Bytes())
 				ethPeer := h.peers.peer(p2pPeerId)
 				if ethPeer != nil {
 					p.Log().Debug("consensus subprotocol retrieved eth peer from peerset", "ethPeer.id", p2pPeerId, "ProtoName", ProtoName)
