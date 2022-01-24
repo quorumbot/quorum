@@ -1196,8 +1196,18 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 		} else {
 			data = []byte(*args.Data)
 		}
-		intrinsicGasPublic, _ := core.IntrinsicGas(data, *args.AccessList, args.To == nil, homestead, istanbul)
-		intrinsicGasPrivate, _ := core.IntrinsicGas(common.Hex2Bytes(common.MaxPrivateIntrinsicDataHex), *args.AccessList, args.To == nil, homestead, istanbul)
+		var accessList types.AccessList
+		if args.AccessList != nil {
+			accessList = *args.AccessList
+		}
+		intrinsicGasPublic, err := core.IntrinsicGas(data, accessList, args.To == nil, homestead, istanbul)
+		if err != nil {
+			return 0, err
+		}
+		intrinsicGasPrivate, err := core.IntrinsicGas(common.Hex2Bytes(common.MaxPrivateIntrinsicDataHex), accessList, args.To == nil, homestead, istanbul)
+		if err != nil {
+			return 0, err
+		}
 
 		if intrinsicGasPrivate > intrinsicGasPublic {
 			if math.MaxUint64-hi < intrinsicGasPrivate-intrinsicGasPublic {
@@ -1794,7 +1804,7 @@ type SendTxArgs struct {
 
 	// For non-legacy transactions
 	AccessList *types.AccessList `json:"accessList,omitempty"`
-	ChainID    *hexutil.Big      `json:"chainId,omitempty"`
+	ChainID    *big.Int          `json:"chainId,omitempty"`
 }
 
 func (s SendTxArgs) IsPrivate() bool {
@@ -1916,8 +1926,7 @@ func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 		log.Trace("Estimate gas usage automatically", "gas", args.Gas)
 	}
 	if args.ChainID == nil {
-		id := (*hexutil.Big)(b.ChainConfig().ChainID)
-		args.ChainID = id
+		args.ChainID = b.ChainConfig().ChainID
 	}
 	//Quorum
 	if args.PrivateTxType == "" {
@@ -1950,7 +1959,7 @@ func (args *SendTxArgs) toTransaction() *types.Transaction {
 	} else {
 		data = &types.AccessListTx{
 			To:         args.To,
-			ChainID:    (*big.Int)(args.ChainID),
+			ChainID:    args.ChainID,
 			Nonce:      uint64(*args.Nonce),
 			Gas:        uint64(*args.Gas),
 			GasPrice:   (*big.Int)(args.GasPrice),
@@ -1974,11 +1983,14 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction, pr
 		// Ensure only eip155 signed transactions are submitted if EIP155Required is set.
 		return common.Hash{}, errors.New("only replay-protected (EIP-155) transactions allowed over RPC")
 	}
-	if err := b.SendTx(ctx, tx); err != nil {
-		return common.Hash{}, err
-	}
 	// Print a log with full tx details for manual investigations and interventions
-	signer := types.MakeSigner(b.ChainConfig(), b.CurrentBlock().Number())
+	// Quorum
+	var signer types.Signer
+	if tx.IsPrivate() {
+		signer = types.QuorumPrivateTxSigner{}
+	} else {
+		signer = types.MakeSigner(b.ChainConfig(), b.CurrentBlock().Number())
+	}
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return common.Hash{}, err

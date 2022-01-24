@@ -406,7 +406,10 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			log.Warn("Enabling snapshot recovery", "chainhead", head.NumberU64(), "diskbase", *layer)
 			recover = true
 		}
-		bc.snaps, _ = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, head.Root(), !bc.cacheConfig.SnapshotWait, true, recover)
+		bc.snaps, err = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, head.Root(), !bc.cacheConfig.SnapshotWait, true, recover)
+		if err != nil {
+			log.Error("Error trying to load snapshot", "err", err)
+		}
 	}
 	// Take ownership of this particular state
 	go bc.update()
@@ -423,12 +426,12 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			bc.cacheConfig.TrieCleanRejournal = time.Minute
 		}
 		triedb := bc.stateCache.TrieDB()
+		privatetriedb := bc.PrivateStateManager()
 		bc.wg.Add(2)
 		go func() {
 			defer bc.wg.Done()
 			triedb.SaveCachePeriodically(bc.cacheConfig.TrieCleanJournal, bc.cacheConfig.TrieCleanRejournal, bc.quit)
 		}()
-		privatetriedb := bc.PrivateStateManager()
 		go func() {
 			defer bc.wg.Done()
 			privatetriedb.TrieDB().SaveCachePeriodically(bc.cacheConfig.PrivateTrieCleanJournal, bc.cacheConfig.TrieCleanRejournal, bc.quit)

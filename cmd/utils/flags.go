@@ -1805,7 +1805,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	// Read the value from the flag no matter if it's set or not.
 	cfg.Preimages = ctx.GlobalBool(CachePreimagesFlag.Name)
-	if cfg.NoPruning && !cfg.Preimages {
+	if true || cfg.NoPruning && !cfg.Preimages { // TODO: Quorum; force preimages for contract extension and dump of states compatibility, until a fix is found
 		cfg.Preimages = true
 		log.Info("Enabling recording of key preimages since archive mode is used")
 	}
@@ -2039,13 +2039,13 @@ func RegisterPluginService(stack *node.Node, cfg *node.Config, skipVerify bool, 
 }
 
 // Configure smart-contract-based permissioning service
-func RegisterPermissionService(stack *node.Node, useDns bool) {
+func RegisterPermissionService(stack *node.Node, useDns bool, chainID *big.Int) {
 	permissionConfig, err := types.ParsePermissionConfig(stack.DataDir())
 	if err != nil {
 		Fatalf("loading of %s failed due to %v", params.PERMISSION_MODEL_CONFIG, err)
 	}
 	// start the permissions management service
-	_, err = permission.NewQuorumPermissionCtrl(stack, &permissionConfig, useDns)
+	_, err = permission.NewQuorumPermissionCtrl(stack, &permissionConfig, useDns, chainID)
 	if err != nil {
 		Fatalf("failed to load the permission contracts as given in %s due to %v", params.PERMISSION_MODEL_CONFIG, err)
 	}
@@ -2257,7 +2257,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readOnly bool, useExist bool)
 		SnapshotLimit:       ethconfig.Defaults.SnapshotCache,
 		Preimages:           ctx.GlobalBool(CachePreimagesFlag.Name),
 	}
-	if cache.TrieDirtyDisabled && !cache.Preimages {
+	if true || cache.TrieDirtyDisabled && !cache.Preimages { // TODO: Quorum; force preimages for contract extension and dump of states compatibility, until a fix is found
 		cache.Preimages = true
 		log.Info("Enabling recording of key preimages since archive mode is used")
 	}

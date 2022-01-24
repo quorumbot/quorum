@@ -95,6 +95,7 @@ type handlerConfig struct {
 	AuthorizationList map[uint64]common.Hash    // Hard coded authorizationList for sync challenged
 
 	// Quorum
+	Engine   consensus.Engine
 	RaftMode bool
 }
 
@@ -161,8 +162,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		txsyncCh:          make(chan *txsync),
 		quitSync:          make(chan struct{}),
 		raftMode:          config.RaftMode,
-		// TODO @achraf
-		//engine:            config.engine,
+		engine:            config.Engine,
 	}
 
 	// Quorum
@@ -437,10 +437,19 @@ func (h *handler) Start(maxPeers int) {
 	h.txsSub = h.txpool.SubscribeNewTxsEvent(h.txsCh)
 	go h.txBroadcastLoop()
 
-	// broadcast mined blocks
-	h.wg.Add(1)
-	h.minedBlockSub = h.eventMux.Subscribe(core.NewMinedBlockEvent{})
-	go h.minedBroadcastLoop()
+	// Quorum
+	if !h.raftMode {
+		// broadcast mined blocks
+		h.wg.Add(1)
+		h.minedBlockSub = h.eventMux.Subscribe(core.NewMinedBlockEvent{})
+		go h.minedBroadcastLoop()
+	} else {
+		// We set this immediately in raft mode to make sure the miner never drops
+		// incoming txes. Raft mode doesn't use the fetcher or downloader, and so
+		// this would never be set otherwise.
+		atomic.StoreUint32(&h.acceptTxs, 1)
+	}
+	// End Quorum
 
 	// start sync handlers
 	h.wg.Add(2)
@@ -665,10 +674,10 @@ func (h *handler) makeQuorumConsensusProtocol(ProtoName string, version uint, le
 			/*
 			* 1. wait for the eth protocol to create and register an eth peer.
 			* 2. get the associate eth peer that was registered by he "eth" protocol.
-			* 2. add the rw protocol for the quorum subprotocol to the eth peer.
-			* 3. start listening for incoming messages.
-			* 4. the incoming message will be sent on the quorum specific subprotocol, e.g. "istanbul/100".
-			* 5. send messages to the consensus engine handler.
+			* 3. add the rw protocol for the quorum subprotocol to the eth peer.
+			* 4. start listening for incoming messages.
+			* 5. the incoming message will be sent on the quorum specific subprotocol, e.g. "istanbul/100".
+			* 6. send messages to the consensus engine handler.
 			* 7. messages to other to other peers listening to the subprotocol can be sent using the
 			*    (eth)peer.ConsensusSend() which will write to the protoRW.
 			 */
@@ -678,6 +687,11 @@ func (h *handler) makeQuorumConsensusProtocol(ProtoName string, version uint, le
 				// the ethpeer should be registered, try to retrieve it and start the consensus handler.
 				p2pPeerId := fmt.Sprintf("%x", p.ID().Bytes())
 				ethPeer := h.peers.peer(p2pPeerId)
+				if ethPeer == nil {
+					p2pPeerId = fmt.Sprintf("%x", p.ID().Bytes()) //TODO:BBO
+					ethPeer = h.peers.peer(p2pPeerId)
+					log.Warn("full p2p peer", "id", p2pPeerId, "ethPeer", ethPeer)
+				}
 				if ethPeer != nil {
 					p.Log().Debug("consensus subprotocol retrieved eth peer from peerset", "ethPeer.id", p2pPeerId, "ProtoName", ProtoName)
 					// add the rw protocol for the quorum subprotocol to the eth peer.
@@ -695,6 +709,9 @@ func (h *handler) makeQuorumConsensusProtocol(ProtoName string, version uint, le
 		},
 		PeerInfo: func(id enode.ID) interface{} {
 			if p := h.peers.peer(fmt.Sprintf("%x", id[:8])); p != nil {
+				return p.Info()
+			}
+			if p := h.peers.peer(fmt.Sprintf("%x", id)); p != nil { // TODO:BBO
 				return p.Info()
 			}
 			return nil
@@ -767,6 +784,9 @@ func (h *handler) makeLegacyProtocol(protoName string, version uint, length uint
 		},
 		PeerInfo: func(id enode.ID) interface{} {
 			if p := h.peers.peer(fmt.Sprintf("%x", id[:8])); p != nil {
+				return p.Info()
+			}
+			if p := h.peers.peer(fmt.Sprintf("%x", id)); p != nil { // TODO:BBO
 				return p.Info()
 			}
 			return nil

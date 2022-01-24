@@ -241,7 +241,13 @@ func (b *EthAPIBackend) GetReceipts(ctx context.Context, hash common.Hash) (type
 }
 
 func (b *EthAPIBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
-	receipts := b.eth.blockchain.GetReceiptsByHash(hash)
+	// Quorum
+	// We should use the modified getReceipts to get the private receipts for PSI (MPS)
+	receipts, err := b.GetReceipts(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+	// End Quorum
 	if receipts == nil {
 		return nil, nil
 	}
@@ -438,8 +444,8 @@ func (b *EthAPIBackend) StatesInRange(ctx context.Context, fromBlock *types.Bloc
 	return b.eth.statesInRange(fromBlock, toBlock, reexec)
 }
 
-func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, mps.PrivateStateRepository, func(), error) {
-	return b.eth.stateAtTransaction(block, txIndex, reexec)
+func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, *state.StateDB, mps.PrivateStateRepository, func(), error) {
+	return b.eth.stateAtTransaction(ctx, block, txIndex, reexec)
 }
 
 func (b *EthAPIBackend) GetBlockchain() *core.BlockChain {
